@@ -1,5 +1,30 @@
 const TILE_ZOOM = 15; //1.22 km x 1.22 km
+
+/*Tile Zoom (z)	Tile width (km)   
+0	40,075 km	40,075 km	 
+1	20,037 km	20,037 km	
+2	10,018 km	10,018 km	 
+3	5,009 km	5,009 km	   
+4	2,504 km	2,504 km	    
+5	1,252 km	1,252 km	   
+6	626 km	    626 km	     
+7	313 km	    313 km	      
+8	156 km	    156 km	      
+9	78 km	    78 km	    
+10	39 km	    39 km	     
+11	19.5 km	    19.5 km	     
+12	9.8 km	    9.8 km	       
+13	4.9 km	    4.9 km	       
+14	2.45 km	    2.45 km	       
+15	1.22 km	    1.22 km	       
+16	610 m	    610 m	     
+17	305 m	    305 m	     
+18	153 m	    153 m	      
+19	76 m	    76 m	     
+20	38 m	    38 m	    
+*/
 let fetchedTiles = new Set();
+let loadedPointIds = new Set();
 
 var map = L.map('map').setView([52.4823, -1.8911], 11);
 
@@ -9,30 +34,57 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 
+const heat = L.heatLayer([], {
+    radius: 25,
+    blur: 15,
+    maxZoom: 17
+}).addTo(map);
+
+const markers = L.markerClusterGroup({
+    zoomToBoundsOnClick: false,
+    spiderfyOnMaxZoom: true,    
+    maxClusterRadius: 40,                            // 80 default
+    //disableClusteringAtZoom: 16
+});
+
+const UILayer = L.control({position: "bottomleft"})
+
+UILayer.onAdd = function(map) {
+    const div = L.DomUtil.create("div", "map-overlay");
+    div.innerHTML = 
+    `<p class="noti-text">Zoom in to load point</p>
+    <a href='#' id="noti-exit-btn">X</a>`
+
+    L.DomEvent.disableClickPropagation(div);
+    L.DomEvent.disableScrollPropagation(div);
+
+    div.querySelector("#noti-exit-btn").addEventListener("click", (e) => {
+        e.preventDefault();
+        div.style.display = "none";
+    })
+
+    return div;
+};
+UILayer.addTo(map);
+
+
+
 fetch("/api/crime")
 .then(res => res.json())
 .then(data => {
     // create heatmap layer based on the points provided by the database
+    
     const Points = data.map(row => [
         row.latitude, 
         row.longitude, 
         row.intensity_base
     ]);
-    const heat = L.heatLayer(Points, {
-        radius: 25,
-        blur: 15,
-        maxZoom: 17
-    }).addTo(map);
-
-
+    Points.forEach(point => {
+        heat.addLatLng(point);
+    });
 
     // create clusters of markers if points are close together and includes popups
-    const markers = L.markerClusterGroup({
-        zoomToBoundsOnClick: false,
-        spiderfyOnMaxZoom: true,    
-        maxClusterRadius: 40,                            // 80 default
-        //disableClusteringAtZoom: 16
-    });
+    
 
     data.forEach(row => {
         const marker = L.marker([row.latitude, row.longitude]);
@@ -59,68 +111,60 @@ fetch("/api/crime")
 })
 .catch(err => console.error("Error fetching crime data:", err));
 
-
+map.on("zoomend", (e) => {
+    if(map.getZoom() < 13) {
+        document.getElementById("noti-exit-btn").parentElement.style.display = "flex";
+        return
+    };
+})
 
 map.on("moveend", (e) => {
-    //console.log(map.Points);
-    /*
-    console.log("\n",e);
-
-    var bounds = map.getBounds();
-
-    var NW = bounds.getNorthWest();
-    var centre = map.getCenter();
-    console.log(NW);
-    console.log("Centre: ",centre);
-    console.log("\n-------------");
-    
-    var centrePoint= map.latLngToContainerPoint(map.getCenter())
-    var NorthWestPoint= map.latLngToContainerPoint(map.getBounds().getNorthWest());
-
-    var dif = NorthWestPoint.subtract(centrePoint);
-    
-    var nNW = dif.multiplyBy(1.5);
-    console.log("nNW: ",nNW)
-    console.log("nNW LATLNG: ",map.containerPointToLatLng(nNW).lat+" "+map.containerPointToLatLng(nNW).lng)
-    
-
-    var nSE = dif.multiplyBy(-1);
-    console.log("nSE LATLNG: ",map.containerPointToLatLng(nSE).lat+" "+map.containerPointToLatLng(nSE).lng)
-    */
     console.log(map.getZoom())
+    console.log("moveend run getting ranged points on  the map")
     
-    if(map.getZoom() < 13) {
-        //dont load in points
-        //TODO: add logic to show notification "zoom in to load points on the map"
+    if(map.getZoom() < 14) {
         return
-    }
+    };
 
+    console.log("setting variables")
     const bounds = map.getBounds();
     const nw = bounds.getNorthWest();
     const se = bounds.getSouthEast();
+    console.log(nw)
+    console.log(se)
 
-    const tileNW = LatLngToTile(nw.lat, nw.lng);
-    const tileSE = LatLngToTile(se.lat, se.lng);
+    const tileNW = LatLngToTile(nw.lat, nw.lng, TILE_ZOOM);
+    const tileSE = LatLngToTile(se.lat, se.lng, TILE_ZOOM);
+    console.log(tileNW)
+    console.log(tileSE)
 
+    let minLat,maxLat, minLng,maxLng = null;
+    let uniqueTiles = false;
     for(let x = tileNW.x; x <= tileSE.x; x++) {
         for(let y = tileNW.y; y <= tileSE.y; y++) {
-            const tileKey = "${TILE_ZOOM}/${x}/${y}";
-            if(fetchedTiles.has(tileKey)) continue;
-            
-            console.log(tileKey);
-            fetchedTiles.add(tileKey);
-            fetchTileData()
+            const tileKey = `${TILE_ZOOM}/${x}/${y}`;
+            //console.log(tileKey);
 
+            if(fetchedTiles.has(tileKey)) continue;
+            uniqueTiles = true;
+            fetchedTiles.add(tileKey);
+            const b = tileToBounds(x, y, TILE_ZOOM);
+
+            if(minLat == null || minLat > b.minLat) minLat = b.minLat;
+            if(maxLat == null || maxLat < b.maxLat) maxLat = b.maxLat;
+            if(minLng == null || minLng > b.minLng) minLng = b.minLng;
+            if(maxLng == null || maxLng < b.maxLng) maxLng = b.maxLng;
         }
     }
-
-
-
+    if (uniqueTiles) fetchTileData(minLat,maxLat,minLng,maxLng);
 })
-function LatLngToTile(Lat,Lng) {
+
+
+
+function LatLngToTile(Lat,Lng, zoom) {
     //lattitude and longitude convert to a tile grid
     const latrad = Lat*Math.PI / 180;
-    const n = 2**TILE_ZOOM;
+    const n = 2**zoom;
 
     return {
         x: Math.floor((Lng + 180) / 360 * n),
@@ -131,7 +175,73 @@ function LatLngToTile(Lat,Lng) {
     }
 }
 
-function fetchTileData(x, y) {
-    fetch("/api/crime?")
+function tileToBounds(x, y, z) {
+    const n = 2 ** z;
 
+    const lng1 = x / n * 360 - 180;
+    const lng2 = (x + 1) / n * 360 - 180;
+
+    const lat1 = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))) * 180 / Math.PI;
+    const lat2 = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 1) / n))) * 180 / Math.PI;
+
+    return {
+        minLat: lat2,
+        maxLat: lat1,
+        minLng: lng1,
+        maxLng: lng2
+    };
+
+}
+
+function fetchTileData(minLat, maxLat, minLng, maxLng) {
+    fetch(`/api/crime?minLat=${minLat}&maxLat=${maxLat}&minLng=${minLng}&maxLng=${maxLng}`)
+    .then(res => res.json())
+    .then(data => {
+        console.log(data);
+        addPointsToMap(data);
+    })
+    .catch(console.error);
+}
+
+
+
+function addPointsToMap(points) {
+    if (!Array.isArray(points)) {
+        console.error("addPointsToMap expected array, got:", typeof points);
+        return;
+    }
+
+    points.forEach(p => {
+        // guards
+        if (
+            p == null ||
+            typeof p.latitude !== "number" ||
+            typeof p.longitude !== "number"
+        ) {
+            return;
+        }
+
+        if (p.id != null) {
+            if (loadedPointIds.has(p.id)) return;
+            loadedPointIds.add(p.id);
+        }
+
+        const marker = L.marker([p.latitude, p.longitude]);
+
+        if (p.crime_type || p.location) {
+            marker.bindPopup(`
+                <b>${p.crime_type ?? "Unknown"}</b><br>
+                Location: ${p.location ?? "N/A"}<br>
+                Intensity: ${p.intensity_base ?? "N/A"}
+            `);
+        }
+
+        markers.addLayer(marker);
+
+        heat.addLatLng([
+            p.latitude,
+            p.longitude,
+            p.intensity_base ?? 0.1 // use p.intensity_base unless it is null then use 0.1 
+        ]);
+    });
 }

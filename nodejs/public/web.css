@@ -6,11 +6,39 @@ body {
 #map {
     width: 100%;
     height: 100vh;
-    background-color: #c3c3c3;
+    background-color: #b3b3b3;
 }
 .info {
     padding: 10px;
     background: white;
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0,0,0,0.2);
+}
+
+.map-overlay {
+    display: flex;
+    position: absolute;
+    z-index: 200;
+    background-color: #FFFFFFC0;
+    justify-content: space-between;
+    max-width: 500px;
+    padding: 0.2rem;
+    margin: 1.2rem;
+    bottom: 0px;
+    white-space: nowrap;
+    border-radius: 4px;
+}
+
+.noti-text {
+    color: black;
+    font-family: "Verdana";
+    white-space: nowrap;
+}
+
+#noti-exit-btn {
+    text-decoration: none;
+    color: #FF0000FF;
+    display: block;
+    text-align: right;
+    cursor: pointer;
 }
