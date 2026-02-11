@@ -24,9 +24,16 @@ body {
     max-width: 500px;
     padding: 0.2rem;
     margin: 1.2rem;
-    bottom: 0px;
     white-space: nowrap;
     border-radius: 4px;
+}
+
+.bottom-left-overlay {
+    bottom: 0px;
+}
+.top-right-overlay {
+    top: 0px;
+    right: 0px;
 }
 
 .noti-text {
@@ -35,7 +42,7 @@ body {
     white-space: nowrap;
 }
 
-#noti-exit-btn {
+.button {
     text-decoration: none;
     color: #FF0000FF;
     display: block;

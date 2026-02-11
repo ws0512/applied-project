@@ -35,8 +35,8 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 
 const heat = L.heatLayer([], {
-    radius: 25,
-    blur: 15,
+    radius: 16,
+    blur: 10,
     maxZoom: 17
 }).addTo(map);
 
@@ -50,10 +50,10 @@ const markers = L.markerClusterGroup({
 const UILayer = L.control({position: "bottomleft"})
 
 UILayer.onAdd = function(map) {
-    const div = L.DomUtil.create("div", "map-overlay");
+    const div = L.DomUtil.create("div", "map-overlay bottom-left-overlay");
     div.innerHTML = 
     `<p class="noti-text">Zoom in to load point</p>
-    <a href='#' id="noti-exit-btn">X</a>`
+    <a href='#' id="noti-exit-btn" class='button'>X</a>`
 
     L.DomEvent.disableClickPropagation(div);
     L.DomEvent.disableScrollPropagation(div);
@@ -67,7 +67,33 @@ UILayer.onAdd = function(map) {
 };
 UILayer.addTo(map);
 
+const topRightUI = L.control({position: "topright"});
 
+topRightUI.onAdd=function(map) {
+    const div = L.DomUtil.create("div", "map-overlay top-right-overlay");
+    div.innerHTML = 
+    `<a href='#' id='refresh-intensity' class='button'>Refresh Intensity</a>`;
+    L.DomEvent.disableClickPropagation(div);
+    L.DomEvent.disableScrollPropagation(div);
+
+    div.querySelector("#refresh-intensity").addEventListener("click", (e) => {
+        e.preventDefault();
+        updateIntensity();
+    });
+    return div;
+}
+topRightUI.addTo(map);
+
+// only show markers when zoomed in close
+const showMarkersPastZoom = 16;
+map.on("zoomend", () => {
+    if (map.getZoom() >= showMarkersPastZoom) {
+            if (!map.hasLayer(markers)) map.addLayer(markers);
+    } else {
+        if (map.hasLayer(markers)) map.removeLayer(markers);
+
+    }
+})
 
 fetch("/api/crime")
 .then(res => res.json())
@@ -97,15 +123,8 @@ fetch("/api/crime")
 
         markers.addLayer(marker);
     });
-    // only show markers when zoomed in close
-    const showMarkersPastZoom = 16;
-    map.on("zoomend", () => {
-        if (map.getZoom() >= showMarkersPastZoom) {
-                if (!map.hasLayer(markers)) map.addLayer(markers);
-        } else {
-            if (map.hasLayer(markers)) map.removeLayer(markers);
-        }
-    })
+    
+    
 
     map.addLayer(markers);
 })
@@ -115,28 +134,31 @@ map.on("zoomend", (e) => {
     if(map.getZoom() < 13) {
         document.getElementById("noti-exit-btn").parentElement.style.display = "flex";
         return
-    };
+    }
+    else {
+        document.getElementById("noti-exit-btn").parentElement.style.display = "none";
+    }
 })
 
 map.on("moveend", (e) => {
-    console.log(map.getZoom())
-    console.log("moveend run getting ranged points on  the map")
+    //console.log(map.getZoom())
+    //console.log("moveend run getting ranged points on  the map")
     
     if(map.getZoom() < 14) {
         return
     };
 
-    console.log("setting variables")
+    //console.log("setting variables")
     const bounds = map.getBounds();
     const nw = bounds.getNorthWest();
     const se = bounds.getSouthEast();
-    console.log(nw)
-    console.log(se)
+    //console.log(nw)
+    //console.log(se)
 
     const tileNW = LatLngToTile(nw.lat, nw.lng, TILE_ZOOM);
     const tileSE = LatLngToTile(se.lat, se.lng, TILE_ZOOM);
-    console.log(tileNW)
-    console.log(tileSE)
+    //console.log(tileNW)
+    //console.log(tileSE)
 
     let minLat,maxLat, minLng,maxLng = null;
     let uniqueTiles = false;
@@ -156,8 +178,17 @@ map.on("moveend", (e) => {
             if(maxLng == null || maxLng < b.maxLng) maxLng = b.maxLng;
         }
     }
-    if (uniqueTiles) fetchTileData(minLat,maxLat,minLng,maxLng);
+    if (uniqueTiles) {
+        fetchTileData(minLat,maxLat,minLng,maxLng);
+        //TODO: update intensity for these new tiles
+        updateIntensity(minLat,maxLat,minLng,maxLng);
+    }
+
+    //console.log(heat._latlngs)
+
 })
+
+
 
 
 
@@ -237,11 +268,45 @@ function addPointsToMap(points) {
         }
 
         markers.addLayer(marker);
-
+        let count = 0
+        heat._latlngs.forEach((e) => {
+            if(p.longitude+0.0005 > e[1] && p.longitude-0.0005 < e[1] && p.latitude+0.0005 > e[0] && p.latitude-0.0005 < e[0]) {
+                count++;
+            }
+        })
         heat.addLatLng([
             p.latitude,
             p.longitude,
-            p.intensity_base ?? 0.1 // use p.intensity_base unless it is null then use 0.1 
+            ((2*Math.pow((p.intensity_base ?? 0.1),2))+0.2)*(1/((1)*count + 1)) // use p.intensity_base unless it is null then use 0.1 
         ]);
     });
+}
+
+function updateIntensity(minLat, maxLat, minLng, maxLng) {
+    heat._latlngs.forEach((point) => {
+
+        if(point[0] < minLat || point [0] > maxLat) return      // return is continue for a forEach() loop
+        if(point[1] < minLng || point [1] > maxLng) return
+
+        let I_total = Number(point[2]);
+        let I_max = Number(point[2]);
+        let count = 1;
+        heat._latlngs.forEach((point2) => {
+            if(point2[1] < point[1]+0.0005 && point2[1] > point[1]-0.0005 && point2[0] < point[0]+0.0005 && point2[0] > point[0]-0.0005) {
+               I_total += Number(point2[2]);
+               if(Number(point2[2]) > I_max) I_max = Number(point2[2]);
+               count++;
+            }
+        })
+        point[2]=String(
+            Math.max(0, 
+                Math.min(
+                    (Number(point[2])* (Math.log(1+I_total)/Math.log(1+I_max))),
+                    1
+                )
+            )
+        )
+        //console.log("\tI_total:", I_total,"\tI_max:", I_max,"\tcount:",  count, "\tpoint:", point);
+    })
+    heat.redraw()
 }
