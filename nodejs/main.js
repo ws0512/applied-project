@@ -54,7 +54,8 @@ app.get("/api/crime", async (req, res) => {
                 [req.query.minLat, req.query.maxLat, req.query.minLng, req.query.maxLng]
             );
             res.json(result.rows);
-            console.log("Number of rows returned to ${res.rawHeaders[1]},(${res.rawHeaders[9]}): ", result.rows.length)
+            console.log(`Number of rows returned to ${req.ip.replace("::ffff:", "")} (${req.get("User-Agent")}): `, result.rows.length)
+            return    
         }
         
         if(!req.query) {
@@ -62,17 +63,17 @@ app.get("/api/crime", async (req, res) => {
             const result = await connection.query(
                 "SELECT crime_type, latitude, longitude, location, intensity_base FROM \"Crime\""
             );
-            res.json(result.rows);
             console.log("Number of rows returned:", result.rows.length);
+            return res.json(result.rows);
         }
 
-        res.status(400).send("no range of points specified")
+        return res.status(400).send("no range of points specified")
 
 
     }
     catch(err) {
         console.error(err);
-        res.status(500).send("Database error");
+        return res.status(500).send("Database error");
     }
 }) 
 

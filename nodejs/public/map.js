@@ -160,7 +160,10 @@ map.on("moveend", (e) => {
     //console.log(tileNW)
     //console.log(tileSE)
 
-    let minLat,maxLat, minLng,maxLng = null;
+    let minLat = null; 
+    let maxLat = null;
+    let minLng = null;
+    let maxLng = null;
     let uniqueTiles = false;
     for(let x = tileNW.x; x <= tileSE.x; x++) {
         for(let y = tileNW.y; y <= tileSE.y; y++) {
@@ -180,12 +183,10 @@ map.on("moveend", (e) => {
     }
     if (uniqueTiles) {
         fetchTileData(minLat,maxLat,minLng,maxLng);
-        //TODO: update intensity for these new tiles
-        updateIntensity(minLat,maxLat,minLng,maxLng);
     }
-
+    
     //console.log(heat._latlngs)
-
+    
 })
 
 
@@ -196,7 +197,7 @@ function LatLngToTile(Lat,Lng, zoom) {
     //lattitude and longitude convert to a tile grid
     const latrad = Lat*Math.PI / 180;
     const n = 2**zoom;
-
+    
     return {
         x: Math.floor((Lng + 180) / 360 * n),
         y: Math.floor(
@@ -208,20 +209,20 @@ function LatLngToTile(Lat,Lng, zoom) {
 
 function tileToBounds(x, y, z) {
     const n = 2 ** z;
-
+    
     const lng1 = x / n * 360 - 180;
     const lng2 = (x + 1) / n * 360 - 180;
-
+    
     const lat1 = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))) * 180 / Math.PI;
     const lat2 = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 1) / n))) * 180 / Math.PI;
-
+    
     return {
         minLat: lat2,
         maxLat: lat1,
         minLng: lng1,
         maxLng: lng2
     };
-
+    
 }
 
 function fetchTileData(minLat, maxLat, minLng, maxLng) {
@@ -230,6 +231,7 @@ function fetchTileData(minLat, maxLat, minLng, maxLng) {
     .then(data => {
         console.log(data);
         addPointsToMap(data);
+        updateIntensity(minLat,maxLat,minLng,maxLng);
     })
     .catch(console.error);
 }
@@ -277,25 +279,27 @@ function addPointsToMap(points) {
         heat.addLatLng([
             p.latitude,
             p.longitude,
-            ((2*Math.pow((p.intensity_base ?? 0.1),2))+0.2)*(1/((1)*count + 1)) // use p.intensity_base unless it is null then use 0.1 
+            ((20*Math.pow((p.intensity_base ?? 0.1),8))+0.2)*(1/((1)*count + 1)) // use p.intensity_base unless it is null then use 0.1 
         ]);
     });
 }
 
 function updateIntensity(minLat, maxLat, minLng, maxLng) {
+    let counteffected = 0;
+    console.log(`bounds minLat ${minLat} maxLat ${maxLat} minLng ${minLng} maxLng ${maxLng}`)
+    console.log(`${heat._latlngs[0]}\t${heat._latlngs[1]}\t${heat._latlngs[2]}\t${heat._latlngs[3]}`)
     heat._latlngs.forEach((point) => {
-
-        if(point[0] < minLat || point [0] > maxLat) return      // return is continue for a forEach() loop
-        if(point[1] < minLng || point [1] > maxLng) return
-
+        if(point[0] < minLat || point [0] > maxLat || point[1] < minLng || point [1] > maxLng) return      // return is continue for a forEach() loop
+        console.log(point)
         let I_total = Number(point[2]);
         let I_max = Number(point[2]);
         let count = 1;
         heat._latlngs.forEach((point2) => {
             if(point2[1] < point[1]+0.0005 && point2[1] > point[1]-0.0005 && point2[0] < point[0]+0.0005 && point2[0] > point[0]-0.0005) {
-               I_total += Number(point2[2]);
-               if(Number(point2[2]) > I_max) I_max = Number(point2[2]);
-               count++;
+                I_total += Number(point2[2]);
+                if(Number(point2[2]) > I_max) I_max = Number(point2[2]);
+                count++;
+                counteffected++;
             }
         })
         point[2]=String(
@@ -308,5 +312,6 @@ function updateIntensity(minLat, maxLat, minLng, maxLng) {
         )
         //console.log("\tI_total:", I_total,"\tI_max:", I_max,"\tcount:",  count, "\tpoint:", point);
     })
+    console.log(`intensity updated for ${counteffected} points`)
     heat.redraw()
 }
