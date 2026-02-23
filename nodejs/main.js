@@ -48,7 +48,7 @@ app.get("/api/crime", async (req, res) => {
 
         if(req.query && req.query.minLat && req.query.maxLat && req.query.minLng && req.query.maxLng) {
             const result = await connection.query(
-                `SELECT id, crime_type, latitude, longitude, location, intensity_base FROM \"Crime\" 
+                `SELECT id, crime_type, latitude, longitude, location, intensity_base, added_by FROM \"Crime\" 
                 WHERE latitude BETWEEN $1 AND $2 
                 AND longitude BETWEEN $3 AND $4`, 
                 [req.query.minLat, req.query.maxLat, req.query.minLng, req.query.maxLng]

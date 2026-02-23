@@ -1,4 +1,6 @@
 const TILE_ZOOM = 15; //1.22 km x 1.22 km
+const GRID_SIZE = 10; // 10x10 cells per tile
+
 
 /*Tile Zoom (z)	Tile width (km)   
 0	40,075 km	40,075 km	 
@@ -24,7 +26,15 @@ const TILE_ZOOM = 15; //1.22 km x 1.22 km
 20	38 m	    38 m	    
 */
 let fetchedTiles = new Set();
+let tileStore = new Map();
+let processedTileIDs = new Set();
 let loadedPointIds = new Set();
+
+let MAX_POSSIBLE_INTENSITY = 0.98;
+let I_URatio = 0.5;
+let I_UMax = 0.333;
+let I_USum = 75;
+let I_UQuantity = 100;
 
 var map = L.map('map').setView([52.4823, -1.8911], 11);
 
@@ -35,9 +45,9 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 
 const heat = L.heatLayer([], {
-    radius: 16,
-    blur: 10,
-    maxZoom: 17
+    radius: 18, //16
+    blur: 12,
+    maxZoom: 14
 }).addTo(map);
 
 const markers = L.markerClusterGroup({
@@ -138,6 +148,7 @@ map.on("zoomend", (e) => {
     else {
         document.getElementById("noti-exit-btn").parentElement.style.display = "none";
     }
+    //console.log(map.getZoom());
 })
 
 map.on("moveend", (e) => {
@@ -225,19 +236,127 @@ function tileToBounds(x, y, z) {
     
 }
 
+function createTile(x, y) {
+    const bounds = tileToBounds(x, y, TILE_ZOOM);
+    return {
+        x,
+        y,
+        bounds,
+        cells: Array.from({ length: GRID_SIZE * GRID_SIZE }, () => ({
+            points: [],
+            count: 0,
+            intensitySum: 0,
+            intensityMax: 0
+        }))
+    };
+}
+
+function pointToCellIndex(lat, lng, bounds) {
+    const cx = Math.floor(
+        ((lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * GRID_SIZE
+    );
+
+    const cy = Math.floor(
+        ((bounds.maxLat - lat) / (bounds.maxLat - bounds.minLat)) * GRID_SIZE
+    );
+
+    // clamp to grid
+    const x = Math.max(0, Math.min(GRID_SIZE - 1, cx));
+    const y = Math.max(0, Math.min(GRID_SIZE - 1, cy));
+
+    return y * GRID_SIZE + x;
+}
+
+function addPointsToTileCells(points) {
+    points.forEach(p => {
+        // ignore if not the point is not valid
+        if (
+            typeof p.latitude !== "number" ||
+            typeof p.longitude !== "number"
+        ) return; 
+        // determine tile
+        const tileXY = LatLngToTile(p.latitude, p.longitude, TILE_ZOOM);
+        const tileKey = `${TILE_ZOOM}/${tileXY.x}/${tileXY.y}`;
+
+        // create tile if needed
+        if (!tileStore.has(tileKey)) {
+            tileStore.set(tileKey, createTile(tileXY.x, tileXY.y));
+        }
+
+        const tile = tileStore.get(tileKey);
+
+        // determine cell
+        const idx = pointToCellIndex(
+            p.latitude,
+            p.longitude,
+            tile.bounds
+        );
+
+        const cell = tile.cells[idx];
+
+        // add point + stats
+        const I = p.intensity_base ?? 0.1;
+
+        cell.points.push(p);
+        cell.count++;
+        cell.intensitySum += Number(I); // the .intensity_base of a point is technically a string as thats what leaflet heatmap wants as the 3rd value of an array so converting to a number to add a number instead of appending a string.
+        cell.intensityMax = Math.max(cell.intensityMax, I);
+
+    });
+}
+
+
 function fetchTileData(minLat, maxLat, minLng, maxLng) {
     fetch(`/api/crime?minLat=${minLat}&maxLat=${maxLat}&minLng=${minLng}&maxLng=${maxLng}`)
     .then(res => res.json())
     .then(data => {
-        console.log(data);
-        addPointsToMap(data);
-        updateIntensity(minLat,maxLat,minLng,maxLng);
+        console.log(`points: ${data.length} in the area: minLat:${minLat} maxLat:${maxLat} minLng:${minLng} maxLng:${maxLng}`);
+        //addPointsToMap(data);
+        addPointsToTileCells(data);
+        //updateIntensity(minLat,maxLat,minLng,maxLng);
+        //console.log(tileStore);
+        
+        tileStore.forEach((tile, key) => {
+            if(processedTileIDs.has(key)) return // skip already added tiles
+            //console.log(key);
+            //console.log(processedTileIDs);
+            tile.cells.forEach(cell => {
+                if(cell.points.length == 0) return //skip empty cells
+                let latSum = 0;
+                let lngSum = 0;
+                cell.points.forEach(p => {
+                    latSum += p.latitude;
+                    lngSum += p.longitude;
+
+                    // might as well add these points to the markers while itterating through them here
+                    const marker = L.marker([p.latitude, p.longitude]);
+                    if (p.crime_type || p.location) {
+                        marker.bindPopup(`
+                            <b>${p.crime_type ?? "Unknown"}</b><br>
+                            Location: ${p.location ?? "N/A"}<br>
+                            Intensity: ${p.intensity_base ?? "N/A"}<br>
+                            added by: ${p.added_by ?? "N/A"}
+                        `);
+                    }
+
+                    markers.addLayer(marker);
+
+                })
+                //console.log(latSum/cell.points.length+"\t"+lngSum/cell.points.length+"\t"+calculateIntensityOfACell(cell))
+                heat.addLatLng([latSum/cell.points.length, lngSum/cell.points.length ,calculateIntensityOfACell(cell)])
+            })
+            //console.log(key);
+            processedTileIDs.add(key);
+        });
+
+
+
     })
     .catch(console.error);
 }
 
 
-
+//@deprecated
 function addPointsToMap(points) {
     if (!Array.isArray(points)) {
         console.error("addPointsToMap expected array, got:", typeof points);
@@ -284,13 +403,25 @@ function addPointsToMap(points) {
     });
 }
 
+
+function calculateIntensityOfACell(cell) {
+    const I_quantity = Math.min(Math.log(1 + cell.count) / Math.log(1 + I_UQuantity), 1);
+    const I_sum_component = Math.min(Math.log(1 + cell.intensitySum) / Math.log(1 + I_USum), 1);
+    
+    const I_combined = I_URatio * I_quantity + (1-I_URatio) * I_sum_component; // adjust 0.5/0.5 for weighting
+    const I_final = (1 - I_UMax) * I_combined + I_UMax * (cell.intensityMax / MAX_POSSIBLE_INTENSITY);
+    //console.log(`${I_final}\nN: ${cell.count} ${cell.points.length} \tI_Quantity: ${I_quantity} ${cell.count} \tI_sum_component: ${I_sum_component} ${cell.intensitySum} \tI_max ${cell.intensityMax}`)
+    return Math.max(0, Math.min(I_final, 1)); // clamp to [0,1]
+}
+
+//@Deprecated
 function updateIntensity(minLat, maxLat, minLng, maxLng) {
     let counteffected = 0;
     console.log(`bounds minLat ${minLat} maxLat ${maxLat} minLng ${minLng} maxLng ${maxLng}`)
     console.log(`${heat._latlngs[0]}\t${heat._latlngs[1]}\t${heat._latlngs[2]}\t${heat._latlngs[3]}`)
     heat._latlngs.forEach((point) => {
         if(point[0] < minLat || point [0] > maxLat || point[1] < minLng || point [1] > maxLng) return      // return is continue for a forEach() loop
-        console.log(point)
+        //console.log(point)
         let I_total = Number(point[2]);
         let I_max = Number(point[2]);
         let count = 1;
@@ -315,3 +446,12 @@ function updateIntensity(minLat, maxLat, minLng, maxLng) {
     console.log(`intensity updated for ${counteffected} points`)
     heat.redraw()
 }
+
+/*L.Routing.control({
+  waypoints: [
+    L.latLng(57.74, 11.94),
+    L.latLng(57.6792, 11.949)
+  ]
+}).addTo(map);
+
+*/
