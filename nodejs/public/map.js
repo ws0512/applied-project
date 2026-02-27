@@ -29,6 +29,7 @@ let fetchedTiles = new Set();
 let tileStore = new Map();
 let processedTileIDs = new Set();
 let loadedPointIds = new Set();
+let routeLocations = new Array();
 
 let MAX_POSSIBLE_INTENSITY = 0.98;
 let I_URatio = 0.5;
@@ -63,7 +64,7 @@ UILayer.onAdd = function(map) {
     const div = L.DomUtil.create("div", "map-overlay bottom-left-overlay");
     div.innerHTML = 
     `<p class="noti-text">Zoom in to load point</p>
-    <a href='#' id="noti-exit-btn" class='button'>X</a>`
+    <a href='#' id="noti-exit-btn" class='button' style="margin-bottom: 8px">X</a>`
 
     L.DomEvent.disableClickPropagation(div);
     L.DomEvent.disableScrollPropagation(div);
@@ -198,6 +199,26 @@ map.on("moveend", (e) => {
     
     //console.log(heat._latlngs)
     
+})
+
+map.on("click", (e) => {
+    console.log(e);
+    var myIcon = L.icon({
+        iconUrl: 'barry.png',
+        iconSize: [128, 128],
+        iconAnchor: [50, 128],
+        popupAnchor: [-3, -76],
+        shadowUrl: 'shadow.png',
+        shadowSize: [32, 32],
+        shadowAnchor: [4, 4]
+    });
+    routeLocations.push({lat: e.latlng.lat, lon: e.latlng.lng});
+    L.marker(e.latlng, {icon: myIcon}).addTo(map);
+})
+
+document.getElementById("calc-route-button").addEventListener("click", (e) => {
+    console.log(`requesting a route for locations ${routeLocations}`);
+    requestRoute(routeLocations);
 })
 
 
@@ -447,11 +468,66 @@ function updateIntensity(minLat, maxLat, minLng, maxLng) {
     heat.redraw()
 }
 
-/*L.Routing.control({
+
+/*
+L.Routing.control({
   waypoints: [
-    L.latLng(57.74, 11.94),
-    L.latLng(57.6792, 11.949)
+    L.latLng(56.74, -2.94),
+    L.latLng(56.6792, -2.949)
   ]
 }).addTo(map);
-
 */
+function requestRoute(locations) {
+    fetchRoute(locations)
+    .then(fetched => {
+        fetched.routes.forEach(route => {
+            const polyline = L.polyline(route.coordinates, { color: 'blue', weight: 4 }).addTo(map);
+            map.fitBounds(polyline.getBounds());
+        })
+    })
+}
+
+async function fetchRoute(locations) {
+    const requestData = {
+        locations,
+        costing: "pedestrian",
+        exclude_polygons: {
+            "type": "FeatureCollection",
+            "features": [{
+                "type": "Polygon", 
+                "geometry": {
+                    "coordinates":[
+                        [[52.481, -1.921],
+                        [52.482, -1.921],
+                        [52.482, -1.920],
+                        [52.481, -1.920],
+                        [52.481, -1.921]]
+                    ]
+
+                },
+                "properties": {
+                    "levels": []
+                }
+            }]
+        }
+    };
+    console.log(requestData);
+    const res = await fetch("/api/route", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(requestData)
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    console.log(data);
+    return data;
+}
+
+//fetchRoute().catch(console.error);
+/*requestRoute([
+    {lat: 52.531458, lon:-1.857663},
+    {lat: 52.512840, lon: -1.884576}
+])*/

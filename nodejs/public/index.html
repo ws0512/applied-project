@@ -6,22 +6,44 @@
     <title>Interactive Map</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
-
     <link rel="stylesheet" href="web.css" />
+    
 </head>
 <body>
     <div id="header">
         <div id="start" class="header">
-            <p>start</p>
+            <p id="calc-route-button" class="button">calculate the route</p>
         </div>
         <div id="centre" class="header">
             <p> centre</p>
         </div>
         <div id="end" class="header">
-            <p>end</p>
+            <button id="login-header-button">Login</button>
+        </div>
+    </div>
+    <div id="popup-wrapper">
+        <div id="popup-content">
+            <span id="login-head">
+                <p id="close-login" class="button">x</p>
+            </span>
+            <ul>
+                <li class="login-field">
+                    <label>Username</label>
+                    <input id="username-login-input" class="login input" type="text">
+                </li>
+                <li id="password-field" class="login-field">
+                    <label>Password</label>
+                    <input id="password-login-input" class="login input" type="password">
+                </li>
+                <li class="login-field login-buttons">
+                    <button id="login-con-signup-btn">Sign Up</button>
+                    <button id="login-con-login-btn">Login</button>
+                </li>
+            </ul>
         </div>
     </div>
     <div id="map"></div>
+    <script type="module" src="main.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
