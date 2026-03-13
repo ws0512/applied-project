@@ -204,10 +204,10 @@ map.on("moveend", (e) => {
 map.on("click", (e) => {
     console.log(e);
     var myIcon = L.icon({
-        iconUrl: 'barry.png',
-        iconSize: [128, 128],
-        iconAnchor: [50, 128],
-        popupAnchor: [-3, -76],
+        iconUrl: 'marker.png',
+        iconSize: [64, 64],
+        iconAnchor: [32, 64],
+        popupAnchor: [0, -64],
         shadowUrl: 'shadow.png',
         shadowSize: [32, 32],
         shadowAnchor: [4, 4]
@@ -494,14 +494,15 @@ async function fetchRoute(locations) {
         exclude_polygons: {
             "type": "FeatureCollection",
             "features": [{
-                "type": "Polygon", 
+                "type": "Feature",
                 "geometry": {
+                    "type": "Polygon", 
                     "coordinates":[
-                        [[52.481, -1.921],
-                        [52.482, -1.921],
-                        [52.482, -1.920],
-                        [52.481, -1.920],
-                        [52.481, -1.921]]
+                        [[52.47974445953175, -1.9246156254673905],
+                        [52.476677710353265, -1.9205333814256134],
+                        [52.478675139485524, -1.9148719589983176],
+                        [52.48232486016832, -1.9208904199955532],
+                        [52.47974445953175, -1.9246156254673905]]
                     ]
 
                 },
@@ -526,8 +527,118 @@ async function fetchRoute(locations) {
     return data;
 }
 
+function createAvoidancePolygons() {
+    
+}
+
 //fetchRoute().catch(console.error);
 /*requestRoute([
     {lat: 52.531458, lon:-1.857663},
     {lat: 52.512840, lon: -1.884576}
 ])*/
+
+
+
+
+function addStaticPolygon(map, coordinates, options = {}) {
+  // Default styling
+  const defaultOptions = {
+    color: 'blue',        // border color
+    fillColor: '#3388ff', // fill color
+    fillOpacity: 0.5
+  };
+
+  // Merge default options with user-provided options
+  const polygonOptions = { ...defaultOptions, ...options };
+
+  // Create the polygon
+  const polygon = L.polygon(coordinates, polygonOptions).addTo(map);
+
+  // Fit map bounds to polygon
+  map.fitBounds(polygon.getBounds());
+
+  return polygon;
+}
+
+// Coordinates for the polygon
+const fivePoints =  [[52.50974445953175, -2.0146156254673905],
+                        [52.476677710353265, -2.0105333814256134],
+                        [52.478675139485524, -2.0348719589983176],
+                        [52.50232486016832, -2.0308904199955532],
+                        [52.50974445953175, -2.0146156254673905]]
+
+// Add polygon to map
+// addStaticPolygon(map, fivePoints, { color: 'red', fillColor: '#f03' });
+
+
+
+
+
+
+const url = "https://api.openrouteservice.org/v2/directions/driving-car";
+
+async function testRoute() {
+    const start = [-2.0215541124343877, 52.47132487539285];
+    const end = [-2.009462714195252, 52.50287051747283];
+
+    // --- 4. Define avoidance polygon [lng, lat] ---
+    const avoidPolygon = [
+        [52.50974445953175, -2.0146156254673905]
+        [52.50232486016832, -2.0308904199955532],
+        [52.478675139485524, -2.0348719589983176],
+        [52.476677710353265, -2.0105333814256134],
+        [52.50974445953175, -2.0146156254673905],
+    ];
+
+    // Draw the avoidance polygon
+    L.polygon(
+        avoidPolygon.map(p => [p[1], p[0]]), // Leaflet uses [lat, lng]
+            { color: 'red', fillColor: '#f03', fillOpacity: 0.3 }
+    ).addTo(map);
+
+    // --- 5. Prepare ORS request body ---
+    const body = {
+        coordinates: [start, end],
+        options: {
+        avoid_polygons: { type: "Polygon", coordinates: [avoidPolygon] }
+    }
+    };
+
+    // --- 6. Fetch route from ORS ---
+    async function fetchRoute() {
+    try {
+        console.log(body);
+        const res = await fetch("https://api.openrouteservice.org/v2/directions/driving-car", {
+        method: "POST",
+        headers: {
+            "Authorization": process.env.ORS_KEY,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+        });
+
+        const data = await res.json();
+        console.log("ORS response:", data);
+
+        // Decode geometry
+        const decoded = polyline.decode(data.routes[0].geometry);
+
+        // Leaflet expects [lat, lng]
+        const latlngs = decoded.map(p => [p[0], p[1]]);
+
+        // Draw route polyline
+        const routeLine = L.polyline(latlngs, { color: 'blue', weight: 4 }).addTo(map);
+
+        // Fit map to route
+        map.fitBounds(routeLine.getBounds());
+
+    } catch (err) {
+        console.error(err);
+    }
+    }
+    fetchRoute();
+}
+
+/*if (process.env.DEBUG === 1) { 
+    testRoute();
+}*/

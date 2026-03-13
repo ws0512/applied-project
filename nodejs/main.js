@@ -12,11 +12,13 @@ import crypto from "crypto";
 import { Client } from 'pg';
 import express from 'express';
 
+import multer from 'multer';
+import { json } from 'stream/consumers';
+
 const app=express();
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
-
 
 /* //jwt test
 const token = jsonwebtoken.sign(
@@ -27,6 +29,11 @@ const token = jsonwebtoken.sign(
 console.log(token);
 console.log(jsonwebtoken.verify(token, process.env.JWT_SECRET));
 */
+
+const uploads = multer({
+    storage: multer.memoryStorage(),
+    limits: {fileSize: 512*1024} //512 KiB
+})
 
 const connection = new Client({
     host: "localhost",
@@ -95,7 +102,8 @@ app.get("/api/crime", async (req, res) => {
 
 app.post("/api/route", async (req, res) => {
     try {
-        //console.log(req);
+        //console.log(req.body);
+        //console.log(JSON.stringify(req.body, null, 2));
         const response = await fetch(`http://localhost:3001/route`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -130,14 +138,19 @@ app.post("/api/route", async (req, res) => {
     }
 });
 
-
+/*
+ * Oliver section
+ * 10.111.22.141:3000/api/arduinopost?id=23&people=56 
+ */
 app.post(`/api/arduinoPost`, async (req, res) => {
     try {
-        console.log(req.query);
+        console.log("req: ", req);
+        console.log("req boady: ", req.body);
+        console.log("req query: ", req.query);
         if(req.query && true) {
-            const result = await connection.query(``);
-            res.json(result.rows);
-            return
+            //const result = await connection.query(``);
+            //res.json(result.rows); 
+            return;
         }
         res.status(400).send(`incorrect format provided`);
     } catch(err) {
@@ -157,13 +170,15 @@ app.post("/login", async (req, res) => {
             `SELECT id, username, password FROM users WHERE username = $1`,
             [username]
         );
+        if(result.rows.length === 0) {res.status(401).json({error: "user or password not found or is incorrect"}) }
         result = result.rows[0];
-        console.log(result.password);
-        console.log(passwdhash);
+        //console.log(result.password);
+        //console.log(passwdhash);
         if(result.password === passwdhash){
             const token = jsonwebtoken.sign({
                 username: result.username,
-                UId: result.id
+                UId: result.id,
+                loggedIn: true
             }, process.env.JWT_SECRET, {expiresIn: "48h"})
             res.cookie("token", token, {
                 httpOnly: true,             // JS cannot read it
@@ -174,7 +189,7 @@ app.post("/login", async (req, res) => {
             res.status(200).json({success: true});
         }
         else{
-            res.status(401).json({error: "user not not found"}) 
+            res.status(401).json({error: "user or password not found or is incorrect"}) 
         }
     }
     catch(err) {
@@ -187,18 +202,18 @@ function authenticateUser(req, res, next) {
     const header = req.headers;
     if (!header) return res.sendStatus(401);
     
-    //{authorization: "bearer <TOKEN>"} splits the authorization string into 2 parts [0]: brearer and [1]:<TOKEN>
+    // switched to JWT*    {authorization: "bearer <TOKEN>"} splits the authorization string into 2 parts [0]: brearer and [1]:<TOKEN>
     const token = req.cookies.token;
     if(!token) return res.status(401).json({error: "Not Authenticated"});
 
     try{
         const payload = jsonwebtoken.verify(token, process.env.JWT_SECRET);
-        req.user = payload;
+        req.payload = payload;
         console.log(payload);
         next();
     }
     catch(err) {
-        return res.status(401).json({error: "Invalid token"})
+        return res.status(401).json({error: "Invalid token", success: false})
     }
 
 }
@@ -206,6 +221,85 @@ app.get("/profile", authenticateUser, async(req, res) => {
     console.log("Meow /ᐠ｡ꞈ｡ᐟ\\");
     res.status(200).json({success: true});
 })
+
+app.get("/auth-me", authenticateUser, async(req, res) => {
+    res.status(200).json({payload: req.payload, success: true});
+})
+app.post("/logout", (req, res) => {
+    res.clearCookie("token");
+    res.status(200).json({success: true});
+});
+app.post("/create-account", async (req, res) => {
+    console.log("create account\t", req.body);
+    if (!req.body.username || !req.body.password) {
+        res.status(401).json({success: false, error: "invalid request, missing username or password."});
+    }
+
+    const {username, password} = req.body
+    const passwdhash = crypto.createHash('sha256').update(password).digest('hex');
+
+    const userExistsCheck = await connection.query(`
+        SELECT * FROM users WHERE username = $1`,
+        [username]
+    )
+    console.log(userExistsCheck.rows.length);
+    if (userExistsCheck.rows.length !== 0) {
+        res.status(401).json({success: false, error: "user already exists"});
+        return;
+    }
+    const result = await connection.query(`
+        INSERT INTO users(username, password) VALUES($1, $2) RETURNING * 
+        `,
+        [username, passwdhash]
+    )
+    console.log(`sign up btn result of insert ${result}`);
+    const token = jsonwebtoken.sign({
+        username: result.rows[0].username,
+        UId: result.rows[0].id,
+        loggedIn: true
+    }, process.env.JWT_SECRET, {expiresIn: "48h"})
+    res.cookie("token", token, {
+        httpOnly: true,             // JS cannot read it
+        secure: process.env.NODE_ENV === "production", // only HTTPS in prod
+        sameSite: "lax",             // prevents some CSRF attacks
+        maxAge: 48 * 60 * 60 * 1000 // 48 hours
+    });
+    res.status(200).json({success: true});
+})
+
+app.post("/profile/upload-pfp", authenticateUser, uploads.single("image"), async (req, res) => {
+    //console.log(req.payload);
+    //console.log(req.file);
+
+    const imageBuffer = req.file.buffer;
+    const base64Image = imageBuffer.toString("base64");
+
+    const result = await connection.query(`
+        UPDATE users SET profile_icon=$1 WHERE id=$2`,
+        [base64Image, req.payload.UId]
+    )
+
+    res.status(200)
+
+})
+
+app.get("/profile/get-pfp", authenticateUser, async (req, res) => {
+    const result = await connection.query(`
+        SELECT profile_icon FROM users WHERE id=$1`,
+        [req.payload.UId]
+    )
+    console.log(`Profile icon: ${result.rows[0]}`)
+    res.status(200).json({profile_icon: result.rows[0].profile_icon});
+})
+
+app.post("/profile/remove", authenticateUser, async (req, res) => {
+    const result = await connection.query(`
+        DELETE FROM users WHERE id = $1`,
+        [req.payload.UId]
+    )
+    res.status(200)
+})
+
 /*app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");

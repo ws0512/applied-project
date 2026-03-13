@@ -63,10 +63,28 @@ use this IP address to connect to the website by typing the address  into the br
 example ```10.111.000.000:3000```
 
 
+# Valhalla  
 
+## WINDOWS 
 
 docker run --rm --entrypoint valhalla_service -p 3001:3001 -v C:\Users\g4l4x\Desktop\applie~1\Valhalla\tiles:/data -v C:\Users\g4l4x\Desktop\applie~1\Valhalla\config:/config ghcr.io/gis-ops/docker-valhalla/valhalla:latest /config/valhalla.json
 
 docker run --rm --entrypoint valhalla_build_config -v C:\Users\g4l4x\Desktop\applied~1\Valhalla\tiles:/data -v C:\Users\g4l4x\Desktop\applied~1\Valhalla\config:/config ghcr.io/gis-ops/docker-valhalla/valhalla:latest --mjolnir-tile-dir /data
 
 docker run --rm --entrypoint valhalla_build_tiles -v C:\Users\g4l4x\Desktop\APPLIE~1\Valhalla\tiles:/custom_tiles -v C:\Users\g4l4x\Desktop\APPLIE~1\Valhalla\config:/custom_config ghcr.io/gis-ops/docker-valhalla/valhalla:latest -c /custom_config/valhalla.json /custom_tiles/united-kingdom-260223.osm.pbf
+
+## LINUX (Arch)
+
+install yay from the AUR
+and download a road map tile file from https://download.geofabrik.de/europe.html and place it in the projects root directory
+`yay -S valhalla` 
+
+cd to the project root
+
+`mkdir -p ./Valhalla/{config,tiles}`
+
+`valhalla_build_config --mjolnir-tile-dir ./Valhalla/tiles > ./Valhalla/config/valhalla.json`
+
+`valhalla_build_tiles -c ./Valhalla/config/valhalla.json ./united-kingdom-260228.osm.pbf` (5-15 minutes on linux, 1 hour or longer virtualized)
+
+start the roting tool with `valhalla_service ./Valhalla/config/valhalla.json`

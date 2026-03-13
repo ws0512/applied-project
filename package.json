@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@mapbox/polyline": "^1.2.1",
-    "mapbox": "^1.0.0-beta10"
+    "mapbox": "^1.0.0-beta10",
+    "multer": "^2.1.1"
   }
 }
