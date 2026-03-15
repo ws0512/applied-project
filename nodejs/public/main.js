@@ -1,3 +1,5 @@
+import { captureNextClickOnMap, addmarker, clearMarkers, drawMarkers, drawMarker, requestRoute} from "./map.js";
+
 document.getElementById("login-header-button").addEventListener("click", e => {
     document.getElementById("popup-wrapper").classList.add("active");
 })
@@ -175,3 +177,216 @@ function showLoggedInUser(user) {
     })
 }
 
+
+
+
+const McButton = document.querySelector("[data-hamburger-menu]");
+const McBar1 = McButton.querySelector("b:nth-child(1)");
+const McBar2 = McButton.querySelector("b:nth-child(2)");
+const McBar3 = McButton.querySelector("b:nth-child(3)");
+const sidebar = document.getElementById("sidebar")
+
+McButton.addEventListener("click", () => {
+
+    McButton.classList.toggle("active");
+    sidebar.classList.toggle("active")
+    setTimeout(() => {
+        document.getElementById("map").invalidateSize();
+    }, 300);
+
+    if (McButton.classList.contains("active")) {
+
+        McBar1.animate(
+            [{ top: "0%" }, { top: "50%" }],
+            { duration: 200, fill: "forwards", easing: "ease" }
+        );
+
+        McBar3.animate(
+            [{ top: "100%" }, { top: "50%" }],
+            { duration: 200, fill: "forwards", easing: "ease" }
+        ).onfinish = () => {
+
+            McBar3.animate(
+                [{ transform: "rotate(0deg)" }, { transform: "rotate(90deg)" }],
+                { duration: 800, fill: "forwards", easing: "ease" }
+            );
+
+            McButton.animate(
+                [{ transform: "rotate(0deg)" }, { transform: "rotate(135deg)" }],
+                { duration: 800, fill: "forwards", easing: "ease" }
+            );
+
+        };
+
+    } else {
+
+        McBar3.animate(
+            [{ transform: "rotate(90deg)" }, { transform: "rotate(0deg)" }],
+            { duration: 800, fill: "forwards", easing: "ease" }
+        ).onfinish = () => {
+
+            McBar3.animate(
+                [{ top: "50%" }, { top: "100%" }],
+                { duration: 200, fill: "forwards", easing: "ease" }
+            );
+
+        };
+
+        McBar1.animate(
+            [{ top: "50%" }, { top: "0%" }],
+            { duration: 200, delay: 800, fill: "forwards", easing: "ease" }
+        );
+
+        McButton.animate(
+            [{ transform: "rotate(135deg)" }, { transform: "rotate(0deg)" }],
+            { duration: 800, fill: "forwards", easing: "ease" }
+        );
+
+    }
+
+});
+
+
+
+
+const container = document.getElementById("route-point-container");
+const addBtn = document.getElementById("add-route-point");
+const calcBtn = document.getElementById("calc-route-button");
+
+let pointCount = 0;
+
+// drag state
+let dragSrcEl = null;
+
+// helper to handle drag events
+    function handleDragStart(e) {
+        dragSrcEl = this;
+        this.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+    }
+
+    function handleDragEnd() {
+    this.classList.remove("dragging");
+    }
+
+    function handleDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const dragging = container.querySelector(".dragging");
+        const afterElement = getDragAfterElement(container, e.clientY);
+        if (afterElement == null) {
+            container.appendChild(dragging);
+        } else {
+            container.insertBefore(dragging, afterElement);
+        }
+    }
+
+    function getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll(".point:not(.dragging)")];
+
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+            } else {
+            return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+// Add new point
+addBtn.addEventListener("click", () => {
+    pointCount++;
+
+    const pointDiv = document.createElement("div");
+    pointDiv.className = "point";
+    pointDiv.style = "margin: 5px;";
+    pointDiv.draggable = true;
+
+    const latInput = document.createElement("input");
+    latInput.classList = ["lat"];
+    latInput.style = "flex: 1;width: 110px";
+    latInput.type = "number";
+    latInput.placeholder = "Latitude";
+
+    const lngInput = document.createElement("input");
+    lngInput.classList = ["lng"];
+    lngInput.type = "number";
+    lngInput.style = "flex: 1; width: 110px";
+    lngInput.placeholder = "Longitude";
+
+    const btn = document.createElement("button");
+    btn.textContent = "🗺️";
+    btn.addEventListener("click", () => {
+        const lat = parseFloat(latInput.value);
+        const lng = parseFloat(lngInput.value);
+        if (!isNaN(lat) && !isNaN(lng)) {
+            clearMarkers()
+            console.log(`Plotting point ${pointCount}:`, lat, lng);
+            //addmarker(lat, lng)
+            drawMarker(lat, lng);
+            //refreshMarkers();
+        } else {
+            alert("Enter valid coordinates");
+        }
+    });
+const getFromMapBtn = document.createElement("button");
+getFromMapBtn.textContent = "📍";
+getFromMapBtn.addEventListener("click", () => {
+    //alert('Click on the map to select a point!');
+    getFromMapBtn.style = "background-color: #0000A080"
+    const row = getFromMapBtn.parentElement.closest(".point");
+    const lat = row.querySelector('.lat');
+    const lng = row.querySelector('.lng');
+    captureNextClickOnMap((latlng) => {
+        console.log('User clicked:', latlng);
+        getFromMapBtn.style = "background-color: #FFFFFFFF"
+        lat.value = latlng.lat;
+        lng.value = latlng.lng;
+        //addmarker(latlng.lat, latlng.lng);
+        drawMarker(latlng.lat, latlng.lng);
+        //refreshMarkers();
+    })
+})
+const removeRow = document.createElement("button");
+removeRow.textContent = "🗑️";
+removeRow.style = "background-color: #FF000080"
+removeRow.addEventListener("click", () => {
+    removeRow.parentElement.remove();
+})
+
+pointDiv.append(latInput, lngInput, btn, getFromMapBtn, removeRow);
+container.appendChild(pointDiv);
+
+// attach drag events
+pointDiv.addEventListener("dragstart", handleDragStart);
+pointDiv.addEventListener("dragend", handleDragEnd);
+container.addEventListener("dragover", handleDragOver);
+});
+
+// Calculate route in current order
+calcBtn.addEventListener("click", () => {
+    clearMarkers();
+    const points = [...container.querySelectorAll(".point")].map(div => {
+        const lat = parseFloat(div.querySelector("input[type=number]:nth-child(1)").value);
+        const lng = parseFloat(div.querySelector("input[type=number]:nth-child(2)").value);
+        addmarker(lat, lng);
+        return { lat, lon: lng };
+    });
+    drawMarkers(points);
+    console.log("Route order:", points);
+    requestRoute(points);
+// Use points array to plot polyline on map
+})
+
+function refreshMarkers() {
+    clearMarkers();
+    const points = [...container.querySelectorAll(".point")].map(div => {
+        const lat = parseFloat(div.querySelector("input[type=number]:nth-child(1)").value);
+        const lng = parseFloat(div.querySelector("input[type=number]:nth-child(2)").value);
+        addmarker(lat, lng);
+        return { lat, lon: lng };
+    });
+    drawMarkers(points);
+}

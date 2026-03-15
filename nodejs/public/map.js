@@ -29,7 +29,9 @@ let fetchedTiles = new Set();
 let tileStore = new Map();
 let processedTileIDs = new Set();
 let loadedPointIds = new Set();
-let routeLocations = new Array();
+export let routeLocations = new Array();
+let current_route = null;
+let current_markers = new Array();
 
 let MAX_POSSIBLE_INTENSITY = 0.98;
 let I_URatio = 0.5;
@@ -37,7 +39,7 @@ let I_UMax = 0.333;
 let I_USum = 75;
 let I_UQuantity = 100;
 
-var map = L.map('map').setView([52.4823, -1.8911], 11);
+export var map = L.map('map').setView([52.4823, -1.8911], 11);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
@@ -201,25 +203,52 @@ map.on("moveend", (e) => {
     
 })
 
-map.on("click", (e) => {
-    console.log(e);
-    var myIcon = L.icon({
-        iconUrl: 'marker.png',
-        iconSize: [64, 64],
-        iconAnchor: [32, 64],
-        popupAnchor: [0, -64],
-        shadowUrl: 'shadow.png',
-        shadowSize: [32, 32],
-        shadowAnchor: [4, 4]
-    });
-    routeLocations.push({lat: e.latlng.lat, lon: e.latlng.lng});
-    L.marker(e.latlng, {icon: myIcon}).addTo(map);
-})
+var myIcon = L.icon({
+    iconUrl: 'marker.png',
+    iconSize: [64, 64],
+    iconAnchor: [32, 64],
+    popupAnchor: [0, -64],
+    shadowUrl: 'shadow.png',
+    shadowSize: [32, 32],
+    shadowAnchor: [4, 4]
+});
 
-document.getElementById("calc-route-button").addEventListener("click", (e) => {
+export function addmarker(lat, lng) {
+    console.log(lat, lng);
+    routeLocations.push({lat: lat, lon: lng});
+    //L.marker([lat, lng], {icon: myIcon}).addTo(map);
+}
+export function drawMarkers(points) {
+    console.log(points);
+    for(let i = 0; i < points.length; i++) {
+        console.log(`${i}th point is ${points[i]}`)
+        current_markers.push(L.marker([points[i].lat, points[i].lon], myIcon).addTo(map));
+    }
+}
+export function drawMarker(lat, lng) {
+    console.log(lat, lng)
+    current_markers.push(L.marker([lat, lng], myIcon).addTo(map));
+}
+export function clearMarkers() {
+    routeLocations.length = 0;
+    console.log(L.markers)
+    for(let i = 0; i < current_markers.length; i++) {
+        map.removeLayer(current_markers[i]);
+    }
+}
+
+export function captureNextClickOnMap(callback) {
+     const handler = function(e) {
+        callback(e.latlng);
+        map.off('click', handler);
+    };
+    map.on('click', handler);
+}
+
+/*document.getElementById("calc-route-button").addEventListener("click", (e) => {
     console.log(`requesting a route for locations ${routeLocations}`);
     requestRoute(routeLocations);
-})
+})*/
 
 
 
@@ -477,12 +506,13 @@ L.Routing.control({
   ]
 }).addTo(map);
 */
-function requestRoute(locations) {
+export function requestRoute(locations) {
     fetchRoute(locations)
     .then(fetched => {
         fetched.routes.forEach(route => {
-            const polyline = L.polyline(route.coordinates, { color: 'blue', weight: 4 }).addTo(map);
-            map.fitBounds(polyline.getBounds());
+            if(current_route) {map.removeLayer(current_route)}
+            current_route = L.polyline(route.coordinates, { color: 'blue', weight: 4 }).addTo(map);
+            map.fitBounds(current_route.getBounds());
         })
     })
 }

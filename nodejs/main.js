@@ -102,7 +102,7 @@ app.get("/api/crime", async (req, res) => {
 
 app.post("/api/route", async (req, res) => {
     try {
-        //console.log(req.body);
+        console.log(req.body);
         //console.log(JSON.stringify(req.body, null, 2));
         const response = await fetch(`http://localhost:3001/route`, {
         method: "POST",

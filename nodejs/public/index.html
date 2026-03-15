@@ -11,13 +11,12 @@
 </head>
 <body>
     <div id="header">
-        <div id="start" class="header">
-            <p id="calc-route-button" class="button">calculate the route</p>
+        <div id="start" class="header start">
         </div>
-        <div id="centre" class="header">
+        <div id="centre" class="header centre">
             <p> centre</p>
         </div>
-        <div id="end" class="header">
+        <div id="end" class="header end">
             <div id="login-content-header">
                 <button id="login-header-button">Login</button>
             </div>
@@ -44,7 +43,27 @@
             </ul>
         </div>
     </div>
-    <div id="map"></div>
+    <div id="main-container">
+        <div id="sidebar">
+            <div class="sidebar-header">
+                <div style="flex: 1;"><br></div>
+                <div style="min-width: 30px; width: 30px;">
+                    <div class="McButton" data-hamburger-menu>
+                        <b></b>
+                        <b></b>
+                        <b></b>
+                    </div>
+                </div>
+            </div>
+            <div id="sidebar-content">
+                <p>Create a route</p>
+                <button id="add-route-point">+</button>
+                <div id="route-point-container"></div>
+                <p id="calc-route-button" class="button">calculate the route</p>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
     <script type="module" src="main.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/@mapbox/polyline"></script>
