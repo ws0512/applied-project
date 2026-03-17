@@ -30,7 +30,7 @@ let tileStore = new Map();
 let processedTileIDs = new Set();
 let loadedPointIds = new Set();
 export let routeLocations = new Array();
-let current_route = null;
+let current_route = new Array();
 let current_markers = new Array();
 
 let MAX_POSSIBLE_INTENSITY = 0.98;
@@ -237,12 +237,14 @@ export function clearMarkers() {
     }
 }
 
-export function captureNextClickOnMap(callback) {
-     const handler = function(e) {
+// overwrite the "onClick" event to the callback and after the event is triggered revert back to the default event handler.
+export function captureNextClickOnMap(callback, defaultHandler) {
+    map.off("click", defaultHandler);
+
+    map.once("click", (e) => {
         callback(e.latlng);
-        map.off('click', handler);
-    };
-    map.on('click', handler);
+        map.on("click", defaultHandler);
+    })
 }
 
 /*document.getElementById("calc-route-button").addEventListener("click", (e) => {
@@ -366,6 +368,7 @@ function fetchTileData(minLat, maxLat, minLng, maxLng) {
         //updateIntensity(minLat,maxLat,minLng,maxLng);
         //console.log(tileStore);
         
+        
         tileStore.forEach((tile, key) => {
             if(processedTileIDs.has(key)) return // skip already added tiles
             //console.log(key);
@@ -377,7 +380,7 @@ function fetchTileData(minLat, maxLat, minLng, maxLng) {
                 cell.points.forEach(p => {
                     latSum += p.latitude;
                     lngSum += p.longitude;
-
+                    
                     // might as well add these points to the markers while itterating through them here
                     const marker = L.marker([p.latitude, p.longitude]);
                     if (p.crime_type || p.location) {
@@ -385,11 +388,30 @@ function fetchTileData(minLat, maxLat, minLng, maxLng) {
                             <b>${p.crime_type ?? "Unknown"}</b><br>
                             Location: ${p.location ?? "N/A"}<br>
                             Intensity: ${p.intensity_base ?? "N/A"}<br>
-                            added by: ${p.added_by ?? "N/A"}
-                        `);
-                    }
+                            added by: ${p.added_by ?? "N/A"}<br>
+                            id: ${p.id ?? "N/A"}<br>
+                            <img style="max-width:15vh;max-height:15vh" class="crime-image" src=""><br>
+                            <button class="load-image-btn" data-id="${p.id}">Load Image</button>
+                            `);
+                        }
+                        marker.on('popupopen', (e) => {
+                            const popup = e.popup; // current popup
+                            const btn = popup.getElement().querySelector('.load-image-btn');
+                            const img = popup.getElement().querySelector('.crime-image');
 
-                    markers.addLayer(marker);
+                            btn.addEventListener('click', async () => {
+                                try {
+                                    const res = await fetch(`/api/crime/picture?id=${btn.dataset.id}`);
+                                    const data = await res.json();
+                                    img.src = `data:image/png;base64,${data.pictureB64}`;
+                                    console.log(data);
+                                } catch(err) {
+                                    console.error("Failed to load image:", err);
+                                }
+                            });
+                        });
+                        
+                        markers.addLayer(marker);
 
                 })
                 //console.log(latSum/cell.points.length+"\t"+lngSum/cell.points.length+"\t"+calculateIntensityOfACell(cell))
@@ -398,12 +420,13 @@ function fetchTileData(minLat, maxLat, minLng, maxLng) {
             //console.log(key);
             processedTileIDs.add(key);
         });
-
-
-
+        
+        
+        
     })
     .catch(console.error);
 }
+
 
 
 //@deprecated
@@ -509,12 +532,25 @@ L.Routing.control({
 export function requestRoute(locations) {
     fetchRoute(locations)
     .then(fetched => {
-        fetched.routes.forEach(route => {
-            if(current_route) {map.removeLayer(current_route)}
-            current_route = L.polyline(route.coordinates, { color: 'blue', weight: 4 }).addTo(map);
-            map.fitBounds(current_route.getBounds());
+        let [r, g, b] = [0, 0, 220];
+        current_route.forEach(route => {map.removeLayer(route)});
+        current_route.length = 0;
+        fetched.routes.forEach((route, i) => {
+            console.log(`rgb(${r},${g},${b})`)
+            let line = L.polyline(route.coordinates, { color: `rgb(${r},${g},${b})`, weight: 4 })
+            if (i !== 0) {line = line.addTo(map)}
+            current_route.push(line);
+            if (i !== 0) {map.fitBounds(current_route.at(-1).getBounds())}
+            [r,g,b] = [
+                Math.floor(0+130*(i+1)),
+                Math.floor(220-50*(i+1)),
+                i
+            ]
         })
+        current_route.at(0).addTo(map);
+        map.fitBounds(current_route.at(0).getBounds());
     })
+
 }
 
 async function fetchRoute(locations) {
@@ -540,7 +576,8 @@ async function fetchRoute(locations) {
                     "levels": []
                 }
             }]
-        }
+        },
+        alternates: Number(document.getElementById("alt-route-slider").value)
     };
     console.log(requestData);
     const res = await fetch("/api/route", {
@@ -556,6 +593,12 @@ async function fetchRoute(locations) {
     console.log(data);
     return data;
 }
+
+
+export function disableclickpropagation(element) {
+    L.DomEvent.disableClickPropagation(element)
+}
+
 
 function createAvoidancePolygons() {
     

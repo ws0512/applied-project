@@ -1,4 +1,4 @@
-import { captureNextClickOnMap, addmarker, clearMarkers, drawMarkers, drawMarker, requestRoute} from "./map.js";
+import { captureNextClickOnMap, addmarker, clearMarkers, drawMarkers, drawMarker, requestRoute, map, disableclickpropagation} from "./map.js";
 
 document.getElementById("login-header-button").addEventListener("click", e => {
     document.getElementById("popup-wrapper").classList.add("active");
@@ -190,9 +190,6 @@ McButton.addEventListener("click", () => {
 
     McButton.classList.toggle("active");
     sidebar.classList.toggle("active")
-    setTimeout(() => {
-        document.getElementById("map").invalidateSize();
-    }, 300);
 
     if (McButton.classList.contains("active")) {
 
@@ -295,27 +292,28 @@ let dragSrcEl = null;
         }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
 
-// Add new point
-addBtn.addEventListener("click", () => {
+function createControlpoint(lat, lng) {
     pointCount++;
-
+    
     const pointDiv = document.createElement("div");
     pointDiv.className = "point";
     pointDiv.style = "margin: 5px;";
     pointDiv.draggable = true;
-
+    
     const latInput = document.createElement("input");
     latInput.classList = ["lat"];
     latInput.style = "flex: 1;width: 110px";
     latInput.type = "number";
     latInput.placeholder = "Latitude";
-
+    if(lat !== null) latInput.value = lat;
+    
     const lngInput = document.createElement("input");
     lngInput.classList = ["lng"];
     lngInput.type = "number";
     lngInput.style = "flex: 1; width: 110px";
     lngInput.placeholder = "Longitude";
-
+    if(lng !== null) lngInput.value = lng;
+    
     const btn = document.createElement("button");
     btn.textContent = "🗺️";
     btn.addEventListener("click", () => {
@@ -331,39 +329,45 @@ addBtn.addEventListener("click", () => {
             alert("Enter valid coordinates");
         }
     });
-const getFromMapBtn = document.createElement("button");
-getFromMapBtn.textContent = "📍";
-getFromMapBtn.addEventListener("click", () => {
-    //alert('Click on the map to select a point!');
-    getFromMapBtn.style = "background-color: #0000A080"
-    const row = getFromMapBtn.parentElement.closest(".point");
-    const lat = row.querySelector('.lat');
-    const lng = row.querySelector('.lng');
-    captureNextClickOnMap((latlng) => {
-        console.log('User clicked:', latlng);
-        getFromMapBtn.style = "background-color: #FFFFFFFF"
-        lat.value = latlng.lat;
-        lng.value = latlng.lng;
-        //addmarker(latlng.lat, latlng.lng);
-        drawMarker(latlng.lat, latlng.lng);
-        //refreshMarkers();
+    const getFromMapBtn = document.createElement("button");
+    getFromMapBtn.textContent = "📍";
+    getFromMapBtn.addEventListener("click", () => {
+        //alert('Click on the map to select a point!');
+        getFromMapBtn.style = "background-color: #0000A080"
+        const row = getFromMapBtn.parentElement.closest(".point");
+        const lat = row.querySelector('.lat');
+        const lng = row.querySelector('.lng');
+        captureNextClickOnMap((latlng) => {
+            console.log('User clicked:', latlng);
+            getFromMapBtn.style = "background-color: #FFFFFFFF"
+            lat.value = latlng.lat;
+            lng.value = latlng.lng;
+            //addmarker(latlng.lat, latlng.lng);
+            drawMarker(latlng.lat, latlng.lng);
+            //refreshMarkers();
+        }, clickMenu)
     })
-})
-const removeRow = document.createElement("button");
-removeRow.textContent = "🗑️";
-removeRow.style = "background-color: #FF000080"
-removeRow.addEventListener("click", () => {
-    removeRow.parentElement.remove();
-})
+    
+    const removeRow = document.createElement("button");
+    removeRow.textContent = "🗑️";
+    removeRow.style = "background-color: #FF000080"
+    removeRow.addEventListener("click", () => {
+        removeRow.parentElement.remove();
+    })
+    
+    pointDiv.append(latInput, lngInput, btn, getFromMapBtn, removeRow);
+    container.appendChild(pointDiv);
+    
+    // attach drag events
+    pointDiv.addEventListener("dragstart", handleDragStart);
+    pointDiv.addEventListener("dragend", handleDragEnd);
+    container.addEventListener("dragover", handleDragOver);
+}
 
-pointDiv.append(latInput, lngInput, btn, getFromMapBtn, removeRow);
-container.appendChild(pointDiv);
 
-// attach drag events
-pointDiv.addEventListener("dragstart", handleDragStart);
-pointDiv.addEventListener("dragend", handleDragEnd);
-container.addEventListener("dragover", handleDragOver);
-});
+// Add new point
+addBtn.addEventListener("click", () => createControlpoint(null, null));
+
 
 // Calculate route in current order
 calcBtn.addEventListener("click", () => {
@@ -390,3 +394,129 @@ function refreshMarkers() {
     });
     drawMarkers(points);
 }
+
+
+
+function reportCrimePopUp(lat, lng) {
+    console.log("REPORT MENU");
+
+    let selectedFile = null;
+
+    // TODO aestetics
+    document.body.insertAdjacentHTML("beforeend", 
+        `<div id="report-crime-menu" style="display: flex; flex-direction: column; position: fixed; top: 50vh; left: 50vw; transform: translate(-50%, -50%); min-width: 45vw; min-height: 30vh; z-index: 1000010; background-color: #e0e0e0; border-radius: 25px; border: #404040 1.7px solid ;padding: 60px 20px;">
+        <button style="background-color: red; width: 30px; border-radius: 8px; right: 5px; position: absolute; top: 5px;" onclick="this.parentElement.remove()">X</button>
+        <span class="span1" style="width: 100%;"><input id="report-crime-latitude-input" class="lat" type="number" placeholder="latitude" value="${lat}"><input id="report-crime-longitude-input" class="lng" type="number" placeholder="longitude" value="${lng}"><button id="report-crime-get-coords">📍</button></span>
+        <span class="span2" style="display: flex; padding: 20px 0px;"><p style="margin: 4px 10px;">Name the crime: </p><input type="string" id="report-crime-type" style="flex: 1;"></span>
+        <span>Crime Intensity: <input type="range" min="0" max="1" value="0.3" step="0.01" id="crime-intensity-slider" style="flex: 1;"><p>Value: <span id="crime-intensity-slider-value">0.3</span></p></span>
+        <span><img style="max-width:15vh;max-height:15vh" id="report-crime-image-preview" src=""><button id="crime-add-image">Add picture of a crime (optional)</button></span>
+        <span><button id="crime-report-submit">Submit</button></span>
+        </div>`
+    )
+        
+    disableclickpropagation(document.getElementById("report-crime-menu"));
+    const btn = document.getElementById("report-crime-get-coords")
+    btn.style = "background-color: #0000A080"
+    const row = btn.parentElement;
+
+    document.getElementById("crime-intensity-slider").addEventListener("input", () => {
+        document.getElementById("crime-intensity-slider-value").textContent = document.getElementById("crime-intensity-slider").value;
+    });
+
+    const latinp = row.querySelector('.lat');
+    const lnginp = row.querySelector('.lng');
+    captureNextClickOnMap((latlng) => {
+        console.log('[Report menu]: User clicked:', latlng);
+        btn.style = "background-color: #FFFFFFFF"
+        latinp.value = latlng.lat;
+        lnginp.value = latlng.lng;
+        //addmarker(latlng.lat, latlng.lng);
+        drawMarker(latlng.lat, latlng.lng);
+        //refreshMarkers();
+    }, clickMenu)
+
+    document.getElementById("crime-add-image").addEventListener("click", () => {
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = "image/*";
+        
+        fileInput.onchange = () => {
+            selectedFile = fileInput.files[0];
+            
+            // preview
+            if (selectedFile) {
+                const img = document.getElementById("report-crime-image-preview");
+                img.src = URL.createObjectURL(selectedFile);
+                img.style.display = "block";
+            }
+        };
+        
+        fileInput.click();
+    });
+    document.getElementById("crime-report-submit").addEventListener("click", async () => {
+        const crimetype = document.getElementById("report-crime-type").value;
+        const instensityinp = document.getElementById("crime-intensity-slider").value;
+
+        const formData = new FormData();
+        formData.append("lat", latinp.value);
+        formData.append("lng", lnginp.value);
+        formData.append("intensity", instensityinp)
+        formData.append("crimetype", crimetype);
+
+        // only add image if present ✅
+        if (selectedFile) {
+            formData.append("image", selectedFile);
+        }
+        console.log(formData)
+        const res = await fetch("/api/crime/report", {
+            method: "POST",
+            body: formData,
+            credentials: "include"
+        });
+
+        if (res.ok) {
+            console.log("Crime reported!");
+            document.getElementById("report-crime-menu").remove();
+        } else {
+            console.error("Failed to report crime");
+        }
+    });
+}
+
+
+
+function clickMenu(e) {
+    console.log("clicking :) ",e);
+    console.log("clientY: ", e.originalEvent.clientY)
+    if(document.getElementById("clickMenu")) document.getElementById("clickMenu").remove();
+    const root = document.body;
+
+
+    const maindiv = document.createElement("div")
+    maindiv.id = "clickMenu"
+    maindiv.style = `position: fixed; top: ${e.originalEvent.clientY}px; left: ${e.originalEvent.clientX}px; min-width: 10vw; height: fir-content; background-color: #e0e0e0; z-index: 1000000; border: #404040 1px solid ;border-radius: 10px; padding: 10px;`
+
+    const addPointToRoute = document.createElement("p");
+    addPointToRoute.textContent = "Add controlpoint to the route";
+    addPointToRoute.style = "size: 0.7rem;"
+    addPointToRoute.addEventListener("click", () => createControlpoint(e.latlng.lat, e.latlng.lng))
+
+    const reportCrime = document.createElement("p")
+    reportCrime.textContent = "report a crime at this location";
+    reportCrime.style = "";
+    reportCrime.addEventListener("click", () => { if(!document.getElementById("report-crime-menu")) {reportCrimePopUp(e.latlng.lat, e.latlng.lng)}})
+
+    root.append(maindiv);
+    maindiv.append(addPointToRoute);
+    maindiv.append(reportCrime);
+    map.on("movestart", e => maindiv.remove()) 
+
+}
+
+map.on("click", clickMenu);
+
+
+document.getElementById("alt-route-slider").addEventListener("input", () => {
+    document.getElementById("alt-route-slider-value").textContent = document.getElementById("alt-route-slider").value;
+});
+

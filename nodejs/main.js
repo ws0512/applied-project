@@ -13,7 +13,6 @@ import { Client } from 'pg';
 import express from 'express';
 
 import multer from 'multer';
-import { json } from 'stream/consumers';
 
 const app=express();
 app.use(express.json());
@@ -32,7 +31,7 @@ console.log(jsonwebtoken.verify(token, process.env.JWT_SECRET));
 
 const uploads = multer({
     storage: multer.memoryStorage(),
-    limits: {fileSize: 512*1024} //512 KiB
+    limits: {fileSize: 2*1024*1024} //512 KiB
 })
 
 const connection = new Client({
@@ -125,6 +124,20 @@ app.post("/api/route", async (req, res) => {
                     totalTime: data.trip.summary.time // seconds
                 }
             }]
+        }
+        let i = 1;
+        if (data.alternates) {
+            for(const x of data.alternates) {
+                resp.routes.push( {
+                    name: `alternate ${i}`,
+                    coordinates: x.trip.legs.map(leg => polyline.decode(leg.shape, 6)).flat(),
+                    summary: {
+                        totalDistance: x.trip.summary.length * 1000,
+                        totalTime: x.trip.summary.time
+                    }
+                })
+                i++;
+            }
         }
         //console.log(resp);
         //const text = await response.text();
@@ -299,6 +312,55 @@ app.post("/profile/remove", authenticateUser, async (req, res) => {
     )
     res.status(200)
 })
+
+app.post("/api/crime/report", authenticateUser, uploads.single("image"), async (req, res) => {
+    if(req.crimetype < 4) res.status(401).json("crime type too short");
+    const now = new Date()
+
+    console.log(req.payload);
+    console.log(req.body);
+    if(req.file) {
+        console.log("file specified :)")
+        const imageBuffer = req.file.buffer;
+        const base64Image = imageBuffer.toString("base64");
+        console.log(`image B64 = ${base64Image}`)
+        const response = connection.query(
+            `INSERT INTO "Crime"(latitude, longitude, date,  reported_by, crime_type, added_by, intensity_base, picture) VALUES($1, $2 , $3, 'User', $4, ${req.payload.UId}, $5, $6)`,
+            [req.body.lat, req.body.lng, now, req.body.crimetype, req.body.intensity, base64Image]
+        )
+        //console.log(await response);
+        res.status(200).json(success= true,description ="created successfully")
+    } else {
+        console.log("No file specified")
+        connection.query(
+            `INSERT INTO "Crime"(latitude, longitude,  date, reported_by, crime_type, added_by, intensity_base) VALUES($1, $2 , $3, 'User', $4, ${req.payload.UId}, $5)`,
+            [req.body.latitude, req.body.longitude, now, req.body.crimetype, req.body.intensity]
+        )
+        res.status(200).json(success= true,description ="created successfully without an image")
+    }
+
+})
+
+app.get("/api/crime/picture", async (req, res) => {
+    try {
+        const response = await connection.query(
+            `SELECT picture FROM "Crime" WHERE id = $1`,
+            [req.query.id]
+        );
+
+        if (!response.rows[0] || !response.rows[0].picture) {
+            return res.status(404).json({ error: "No picture found" });
+        }
+
+        console.log(`image: ${response.rows[0].picture}`);
+        res.status(200).json({ pictureB64: response.rows[0].picture });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Database error" });
+    }
+}) 
+
+
 
 /*app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
