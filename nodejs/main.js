@@ -329,7 +329,7 @@ app.post("/api/crime/report", authenticateUser, uploads.single("image"), async (
             [req.body.lat, req.body.lng, now, req.body.crimetype, req.body.intensity, base64Image]
         )
         //console.log(await response);
-        res.status(200).json(success= true,description ="created successfully")
+        res.status(200).json({success: true,description:"created successfully"})
     } else {
         console.log("No file specified")
         connection.query(
