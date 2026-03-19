@@ -336,7 +336,7 @@ app.post("/api/crime/report", authenticateUser, uploads.single("image"), async (
             `INSERT INTO "Crime"(latitude, longitude,  date, reported_by, crime_type, added_by, intensity_base) VALUES($1, $2 , $3, 'User', $4, ${req.payload.UId}, $5)`,
             [req.body.latitude, req.body.longitude, now, req.body.crimetype, req.body.intensity]
         )
-        res.status(200).json(success= true,description ="created successfully without an image")
+        res.status(200).json({success: true,description: "created successfully without an image"})
     }
 
 })
