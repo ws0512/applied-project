@@ -1,4 +1,4 @@
------API Server------
+## API Server
 
 copy the nodejs folder onto your own device.
 
@@ -15,7 +15,7 @@ if you get an error "command 'node' not found", then download nodejs from https:
 
 
 
-------Database-------
+## Database
 
 install PostgreSQL version 18.1 from https://www.enterprisedb.com/downloads/postgres-postgresql-downloads
 
@@ -37,7 +37,7 @@ its truncated to 1000 rows, you can extend it to 10,000 rows by editing the rang
 the database SHOULD* automatically start on os boot
 
 
------ website -----
+## website
 
 to open the website make sure to start the NodeJS server as shown above. and that the database has been created successfully.
 
@@ -65,7 +65,7 @@ example ```10.111.000.000:3000```
 
 # Valhalla  
 
-## WINDOWS 
+### WINDOWS 
 
 ```
 docker run --rm --entrypoint valhalla_service -p 3001:3001 -v C:\Users\g4l4x\Desktop\applie~1\Valhalla\tiles:/data -v C:\Users\g4l4x\Desktop\applie~1\Valhalla\config:/config ghcr.io/gis-ops/docker-valhalla/valhalla:latest /config/valhalla.json
@@ -76,7 +76,7 @@ docker run --rm --entrypoint valhalla_build_config -v C:\Users\g4l4x\Desktop\app
 ```
 docker run --rm --entrypoint valhalla_build_tiles -v C:\Users\g4l4x\Desktop\APPLIE~1\Valhalla\tiles:/custom_tiles -v C:\Users\g4l4x\Desktop\APPLIE~1\Valhalla\config:/custom_config ghcr.io/gis-ops/docker-valhalla/valhalla:latest -c /custom_config/valhalla.json /custom_tiles/united-kingdom-260223.osm.pbf
 ```
-## LINUX (Arch)
+### LINUX (Arch)
 
 install yay from the AUR
 and download a road map tile file from https://download.geofabrik.de/europe.html and place it in the projects root directory
